@@ -1,4 +1,4 @@
 name: EvolutionCore
 description: Provides Methods and Events for the Beta Evolution API
-version: 1.0
+version: 1.2
 main: com.johnymuffin.beta.evolutioncore.EvolutionCore

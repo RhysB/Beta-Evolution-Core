@@ -20,6 +20,7 @@ public class EvolutionCore extends JavaPlugin {
         pdf = this.getDescription();
         logInfo("Enabling Plugin");
         plugin = this;
+        EvolutionCache.getInstance(plugin).setPlugin(plugin);
 
         final EvolutionPlayerListener EPL = new EvolutionPlayerListener(plugin);
         getServer().getPluginManager().registerEvent(org.bukkit.event.Event.Type.PLAYER_JOIN, EPL, Event.Priority.Highest, plugin);
