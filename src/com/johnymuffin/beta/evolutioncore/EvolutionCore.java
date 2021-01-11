@@ -15,7 +15,6 @@ public class EvolutionCore extends JavaPlugin {
     //Poseidon
     private boolean poseidonPresent = false;
     //Authentication Server List
-    private ArrayList<String> authNodes = new ArrayList<String>();
 
     @Override
     public void onEnable() {
@@ -30,7 +29,6 @@ public class EvolutionCore extends JavaPlugin {
         } else {
             logInfo("Project Poseidon support disabled.");
         }
-        authNodes.add("https://auth.johnymuffin.com/serverAuth.php?method=1&username=<username>&userip=<userip>");
 
         EvolutionCache.getInstance(plugin).setPlugin(plugin);
 
@@ -67,7 +65,4 @@ public class EvolutionCore extends JavaPlugin {
         return poseidonPresent;
     }
 
-    public synchronized ArrayList<String> getAuthNodes() {
-        return authNodes;
-    }
 }

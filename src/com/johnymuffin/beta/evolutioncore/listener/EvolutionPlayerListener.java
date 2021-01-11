@@ -1,20 +1,15 @@
 package com.johnymuffin.beta.evolutioncore.listener;
 
 import com.johnymuffin.beta.evolutioncore.AuthReturnType;
+import com.johnymuffin.beta.evolutioncore.BetaEvolutionsUtils;
 import com.johnymuffin.beta.evolutioncore.EvolutionCache;
 import com.johnymuffin.beta.evolutioncore.EvolutionCore;
-import com.johnymuffin.beta.evolutioncore.libs.json.JSONObject;
 import com.projectposeidon.johnymuffin.ConnectionPause;
 import org.bukkit.Bukkit;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerListener;
 import org.bukkit.event.player.PlayerPreLoginEvent;
 
-import java.io.IOException;
-import java.io.UnsupportedEncodingException;
-import java.net.URLEncoder;
-
-import static com.johnymuffin.beta.evolutioncore.JsonReader.readJsonFromUrl;
 import static com.johnymuffin.beta.evolutioncore.event.CallEvolutionAuthEvent.callAuthenticationEvent;
 
 public class EvolutionPlayerListener extends PlayerListener {
@@ -30,49 +25,28 @@ public class EvolutionPlayerListener extends PlayerListener {
             return;
         }
 
-        //Add Connection Pause
-        ConnectionPause connectionPause = event.addConnectionPause(plugin, "BetaEvolutions");
+
         final String username = event.getName();
         final String ipAddress = event.getAddress().getHostAddress();
+        //Check if user is cached, if they are, skip the lookup
+        if (EvolutionCache.getInstance().isPlayerCached(username, ipAddress)) {
+            return;
+        }
 
+        //Add Connection Pause
+        ConnectionPause connectionPause = event.addConnectionPause(plugin, "BetaEvolutions");
         //Check Entries Async
         Bukkit.getServer().getScheduler().scheduleAsyncDelayedTask(plugin, () -> {
-            for (String node : plugin.getAuthNodes()) {
-                try {
-                    String url = node.replace("<username>", username);
-                    url = url.replace("<userip>", ipAddress);
-                    final JSONObject result = readJsonFromUrl(url);
-                    String finalUrl = url;
-                    if (!(result.has("result") && result.has("verified"))) {
-                        //Log error
-                        Bukkit.getServer().getScheduler().scheduleSyncDelayedTask(plugin, () -> {
-                            plugin.logInfo("Malformed response when calling: " + finalUrl);
-                        });
-                        continue;
-                    }
-                    if (!result.getBoolean("result")) {
-                        //Log error
-                        Bukkit.getServer().getScheduler().scheduleSyncDelayedTask(plugin, () -> {
-                            plugin.logInfo("Node failed to provide a valid result: " + finalUrl);
-                        });
-                        continue;
-                    }
-                    if (result.getBoolean("verified")) {
-                        //Add player verified status to cache
-                        Bukkit.getServer().getScheduler().scheduleSyncDelayedTask(plugin, () -> {
-                            //Add player to cache
-                            plugin.logInfo("Authentication status for " + event.getName() + " fetched before login.");
-                            EvolutionCache.getInstance().addPlayerAuthentication(username, ipAddress);
-                        });
-                        break;
-                    }
+            BetaEvolutionsUtils betaEvolutions = new BetaEvolutionsUtils(false);
+            final BetaEvolutionsUtils.VerificationResults verificationResults = betaEvolutions.verifyUser(username, ipAddress);
 
-
-                } catch (Exception e) {
-                    plugin.logInfo(e + ": " + e.getMessage());
+            Bukkit.getServer().getScheduler().scheduleSyncDelayedTask(plugin, () -> {
+                plugin.logInfo(username + " has authenticated with " + verificationResults.getSuccessful() + "/" + verificationResults.getTotal() + " nodes.");
+                if (verificationResults.getSuccessful() > 0) {
+                    EvolutionCache.getInstance().addPlayerAuthentication(username, ipAddress);
                 }
-            }
-            event.removeConnectionPause(connectionPause);
+                event.removeConnectionPause(connectionPause);
+            });
 
 
         });
@@ -83,11 +57,12 @@ public class EvolutionPlayerListener extends PlayerListener {
         if (event.getPlayer() == null) {
             return;
         }
-        String ip = event.getPlayer().getAddress().getAddress().getHostAddress();
+        final String playerName = event.getPlayer().getName();
+        final String ip = event.getPlayer().getAddress().getAddress().getHostAddress();
         //Cache Start
-        if (EvolutionCache.getInstance().isPlayerCached(event.getPlayer().getName(), ip)) {
+        if (EvolutionCache.getInstance().isPlayerCached(playerName, ip)) {
             //Player is known in the cache with ip
-            plugin.logInfo("Received Authentication Status From Cache for: " + event.getPlayer().getName() + " - User is verified");
+            plugin.logInfo("Received Authentication Status From Cache for: " + playerName + " - User is verified");
             callAuthenticationEvent(event.getPlayer(), true, AuthReturnType.successful);
             return;
 
@@ -102,46 +77,17 @@ public class EvolutionPlayerListener extends PlayerListener {
         //Cache End
         plugin.logInfo("Fetching Authentication Status For: " + event.getPlayer().getName());
         Bukkit.getServer().getScheduler().scheduleAsyncDelayedTask(plugin, () -> {
-            try {
-                String url = "https://auth.johnymuffin.com/serverAuth.php?method=1&username=" + URLEncoder.encode(event.getPlayer().getName(), "UTF-8") + "&userip=" + URLEncoder.encode(ip, "UTF-8");
-                final JSONObject obj = readJsonFromUrl(url);
-                Bukkit.getServer().getScheduler().scheduleSyncDelayedTask(plugin, () -> {
-                    if (obj.has("result") && obj.has("verified")) {
-                        if (obj.getBoolean("result")) {
-                            //Auth response
-                            if (obj.getBoolean("verified")) {
-                                //User is verified
-                                plugin.logInfo("Received Authentication Status for: " + event.getPlayer().getName() + " - User is verified");
-                                callAuthenticationEvent(event.getPlayer(), true, AuthReturnType.successful);
-                                //Add player to cache
-                                EvolutionCache.getInstance().addPlayerAuthentication(event.getPlayer().getName(), ip);
-                            } else {
-                                //user isn't verified
-                                plugin.logInfo("Received Authentication Status for: " + event.getPlayer().getName() + " - User isn't verified");
-                                callAuthenticationEvent(event.getPlayer(), false, AuthReturnType.successful);
-                            }
-
-                        } else {
-                            //Auth returned unavailable
-                            plugin.logInfo("Auth returned unavailable");
-                            callAuthenticationEvent(event.getPlayer(), false, AuthReturnType.apierror);
-                        }
-                    } else {
-                        //Invalid Json Response
-                        plugin.logInfo("Received a invalid JSON response");
-                        callAuthenticationEvent(event.getPlayer(), false, AuthReturnType.apierror);
-                    }
-                }, 0L);
-
-            } catch (UnsupportedEncodingException e) {
-                callAuthenticationEvent(event.getPlayer(), false, AuthReturnType.unsuccessful);
-                e.printStackTrace();
-            } catch (IOException e) {
-                callAuthenticationEvent(event.getPlayer(), false, AuthReturnType.unsuccessful);
-                e.printStackTrace();
-            }
-
-
+            BetaEvolutionsUtils betaEvolutions = new BetaEvolutionsUtils(false);
+            final BetaEvolutionsUtils.VerificationResults verificationResults = betaEvolutions.verifyUser(event.getPlayer().getName(), ip);
+            Bukkit.getServer().getScheduler().scheduleSyncDelayedTask(plugin, () -> {
+                plugin.logInfo(playerName + " has authenticated with " + verificationResults.getSuccessful() + "/" + verificationResults.getTotal() + " nodes.");
+                if (verificationResults.getSuccessful() > 0) {
+                    EvolutionCache.getInstance().addPlayerAuthentication(playerName, ip);
+                    callAuthenticationEvent(event.getPlayer(), true, AuthReturnType.successful);
+                } else {
+                    callAuthenticationEvent(event.getPlayer(), false, AuthReturnType.successful);
+                }
+            }, 0L);
         }, 0L);
 
 
