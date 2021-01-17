@@ -4,6 +4,8 @@ import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 
 import java.util.HashMap;
+import java.util.Iterator;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class EvolutionCache {
     private static EvolutionCache singleton;
@@ -36,18 +38,17 @@ public class EvolutionCache {
     public Integer deleteOldCache() {
         int deletedCaches = 0;
         long unixTime = System.currentTimeMillis() / 1000L;
-        for (String key : cacheMap.keySet()) {
-            //Iterate through cache
-            Long expireTime = Long.valueOf(cacheMap.get(key).get("timeout"));
-            if (unixTime < expireTime) {
-                //Cache instance has timed out
-                //Delete if player isn't online
-                if (!isPlayerOnline(cacheMap.get(key).get("username"))) {
-                    cacheMap.remove(key);
-                    deletedCaches = deletedCaches + 1;
-                }
 
+        Iterator<String> iterator = cacheMap.keySet().iterator();
+        while (iterator.hasNext()) {
+            String key = iterator.next();
+            if(unixTime < Long.valueOf(cacheMap.get(key).get("timeout"))) {
+                if(isPlayerOnline(cacheMap.get(key).get("username"))) {
+                    deletedCaches = deletedCaches + 1;
+                    iterator.remove();
+                }
             }
+
         }
         return deletedCaches;
 
