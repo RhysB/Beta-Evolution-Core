@@ -4,6 +4,7 @@ import com.johnymuffin.beta.evolutioncore.libs.json.JSONException;
 import com.johnymuffin.beta.evolutioncore.libs.json.JSONObject;
 
 import java.io.*;
+import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLEncoder;
 import java.nio.charset.Charset;
@@ -302,7 +303,7 @@ public class BetaEvolutionsUtils {
 
     static {
         //Some nodes may support multiple types. Ideally in the future, this class will contact nodes asking for their protocol versions, however, V2 should remain online.
-        beServers.put("https://auth.johnymuffin.com", BEVersion.V1);
+//        beServers.put("https://auth.johnymuffin.com", BEVersion.V1);
         beServers.put("https://auth1.evolutions.johnymuffin.com", BEVersion.V2_PLAINTEXT);
         beServers.put("https://auth2.evolutions.johnymuffin.com", BEVersion.V2_PLAINTEXT);
         beServers.put("https://auth3.evolutions.johnymuffin.com", BEVersion.V2_PLAINTEXT);
@@ -321,8 +322,28 @@ public class BetaEvolutionsUtils {
     //Credit: https://stackoverflow.com/a/4308662
 
     private static JSONObject readJsonFromUrl(String url) throws IOException, JSONException {
-        InputStream is = (new URL(url)).openStream();
+//        InputStream is = (new URL(url)).openStream();
+//
+//        try {
+//            BufferedReader rd = new BufferedReader(new InputStreamReader(is, Charset.forName("UTF-8")));
+//            String jsonText = readAll(rd);
+//            JSONObject json = new JSONObject(jsonText);
+//            return json;
+//        } finally {
+//            is.close();
+//        }
+        return readJsonFromUrlWithTimeout(url, 5000);
+    }
 
+    //Read JSON from URL with timeout
+    private static JSONObject readJsonFromUrlWithTimeout(String url, int timeout) throws IOException, JSONException {
+        URL myURL = new URL(url);
+        HttpURLConnection connection = (HttpURLConnection) myURL.openConnection();
+        connection.setConnectTimeout(timeout);
+        connection.setReadTimeout(timeout);
+        connection.setRequestMethod("GET");
+        connection.connect();
+        InputStream is = connection.getInputStream();
         try {
             BufferedReader rd = new BufferedReader(new InputStreamReader(is, Charset.forName("UTF-8")));
             String jsonText = readAll(rd);
